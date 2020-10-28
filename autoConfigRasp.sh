@@ -57,9 +57,7 @@
 ##airmon-ng start wlan0
 
 #Pull Scripts from Git
-git add .
-git commit -m"${commitment}"
-
+git clone https://github.com/Sebongo/SpiderNetScripts.git
 
 
 #install mosquitto and client
