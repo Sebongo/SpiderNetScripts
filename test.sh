@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo $(ls -al)
+echo TESTTESTTESTTESTTESTTESTTESTTESTTEST

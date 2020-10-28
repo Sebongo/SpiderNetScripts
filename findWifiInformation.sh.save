@@ -1,0 +1,34 @@
+#!/bin/bash
+rm -f ScanResults-01.csv
+airodump-ng -w ScanResults --update 10 --output-format csv wlan0mon > /dev/null
+sed -i 's/BSSID.*//g' ScanResults-01.csv
+sed -n '/,/p' ScanResults-01.csv
+sed -n '/Station/q;p' ScanResults-01.csv > scan.txt
+sed '/^$/d' scan.txt > finalScan.txt
+two=2
+count=$(wc -l <  finalScan.txt)
+x=2
+while [ $x -lt  $count ]; do
+	delimiter=,
+	array=();
+	p=p
+	x=$x$p
+	str=$(sed -n $x finalScan.txt)
+	s=$str$delimiter
+	while [[ $s ]]; do
+		array+=( "${s%%"$delimiter"*}" );
+		s=${s#*"$delimiter"};
+	done;
+	vla="|"
+	for i in "${array[@]}"; do
+		output=$output$i$vla
+	done;
+	echo $output
+	cat <<< "$output" > toBroker.txt
+	email=$(sed -n 2p spiderNet.conf)
+	passwd=$(sed -n 4p spiderNet.conf)
+	mosquitto_pub -h lavis.ddns.net -t $email -p 8883 --cert /home/pi/keys/cloudfare.at.pem --key /home/pi/keys/cloudfare.at.key -m toBroker.txt -u $email -P $passwd
+	rm -f toBroker.txt
+	x=${x%?}
+	x=$(($x+1))
+done;
