@@ -1,0 +1,15 @@
+#!/bin/bash
+rm -f ScanResults-01.csv
+echo "start"
+timeout 10 airodump-ng -w ScanResults --output-format csv wlan0mon & > /dev/null 2> /dev/null
+sleep 12
+pkill airodump-ng
+echo "scanresults"
+sed -i 's/BSSID.*//g' ScanResults-01.csv
+echo "sed1"
+sed -n '/,/p' ScanResults-01.csv
+echo "sed2"
+sed -n '/Station/q;p' ScanResults-01.csv > scan.txt
+echo "sed3"
+sed '/^$/d' scan.txt > finalScan.txt
+echo "sed4"

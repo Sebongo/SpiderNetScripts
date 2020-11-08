@@ -1,0 +1,9 @@
+
+BSSID, First time seen, Last time seen, channel, Speed, Privacy, Cipher, Authentication, Power, # beacons, # IV, LAN IP, ID-length, ESSID, Key
+EC:08:6B:A3:0C:C6, 2020-11-03 15:14:10, 2020-11-03 15:14:26,  6,  54, WPA2, CCMP TKIP, PSK, -88,       12,        0,   0.  0.  0.  0,  15, home-sweet-home, 
+DC:4A:3E:9F:75:1F, 2020-11-03 15:14:10, 2020-11-03 15:14:26,  6,  54, WPA2, CCMP, PSK, -80,       12,        0,   0.  0.  0.  0,  29, DIRECT-1E-HP ENVY 5540 series, 
+9C:97:26:46:15:21, 2020-11-03 15:14:09, 2020-11-03 15:14:26, 11,  54, WPA2, CCMP, PSK, -72,       26,        1,   0.  0.  0.  0,   9, A1-461521, 
+
+Station MAC, First time seen, Last time seen, Power, # packets, BSSID, Probed ESSIDs
+B4:E6:2A:DA:8A:20, 2020-11-03 15:14:09, 2020-11-03 15:14:09, -70,        2, 9C:97:26:46:15:21,
+

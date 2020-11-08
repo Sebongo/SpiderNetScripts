@@ -1,0 +1,16 @@
+  
+  
+  389 NetworkManager
+  389 NetworkManager
+  390 wpa_supplicant
+  390 wpa_supplicant
+  391 avahi-daemon
+  391 avahi-daemon
+  418 avahi-daemon
+  418 avahi-daemon
+  422 dhcpcd
+  422 dhcpcd
+  455 wpa_supplicant
+  455 wpa_supplicant
+  517 dhclient
+  517 dhclient
