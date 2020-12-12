@@ -1,0 +1,28 @@
+#!/bin/bash
+
+#die Connection zwischen Raspberry und WLAN wird gekappt indem bestimmt Prozesse gekillt werden, die die aufrechterhaltung der Verbindung sicherstellen.
+pgrep wpa_supplicant > wpa_supplicantProcess.txt
+p=p
+x=1
+count=$(wc -l < wpa_supplicantProcess.txt)
+while [ $x -lt $count ] ; do
+        x=$x$p
+        num=$(sed -n $x wpa_supplicantProcess.txt)
+        kill $num
+        x=${x%?}
+        x=$(($x+1))
+done;
+#Ein File welches vom verbundenen WLAN Daten sammelt, wird gelöscht und wieder neu erzeugt. Außerdem werden wichtige Daten hineingeschrieben. 
+rm -f DATAFROMWLAN.txt
+touch DATAFROMWLAN.txt
+printf ESSID >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf ping >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf breite >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf zeit >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf nutzer >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf games >> DATAFROMWLAN.txt

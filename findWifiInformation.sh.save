@@ -1,97 +1,491 @@
 #!/bin/bash
+#Globale Variable welche die Version anzeigt
+VERSION="4.1.1"
+
+#Habe alles in Functions eingegliedert, damit ich alle Scripts in eines zusammenfügen kann und diese dann mit options aufrufen kann.
+function findWifiInfo {
+#Scan_Results-01.csv wird gelöscht, da sonst bei nächsten Scriptaufruf die Datei mit 02, dann mit 03 usw. endet. So endet sie immer mit 01.
+#wlan0 wird ausgeschalten, damit gescannt werden kann.
 rm -f ScanResults-01.csv
+ifconfig wlan0 down
+#Es wird gescannt und die Daten werden in eine Datei gespeichert.
 timeout 10 airodump-ng -w ScanResults --output-format csv wlan0mon & > /dev/null 2> /dev/null
 sleep 15
+#airo-dump-ng wird nach 15 Sekunden gekillt.
 pkill airodump-ng
+ifconfig wlan0 up
+#Weitere Daten werden geholt.
+iwlist scanning > iwlistScanning.txt
+#Frequenz der WLANs wird herausgefunden
+frequency=$(grep 'Frequency' iwlistScanning.txt)
+wtr="(Channel "
+printf '%s\n' "${frequency//$wtr/}" > newList.txt
+sed -i "s/Frequency://g" newList.txt
+sed -i "s/)//g" newList.txt
+cat newList.txt | awk -F '\\GHz' '{print $1"GHz"}' > newerList.txt
+sed -i "s/GHz//g" newerList.txt
+#ESSID der WLANs wird herausgefunden
+essid=$(grep 'ESSID' iwlistScanning.txt)
+wpt="ESSID:"
+printf '%s\n' "${essid//$wpt/}" > bestList.txt
 sed -i 's/BSSID.*//g' ScanResults-01.csv
 sed -n '/,/p' ScanResults-01.csv
 sed -n '/Station/q;p' ScanResults-01.csv > scan.txt
 sed '/^$/d' scan.txt > finalScan.txt
+#Counter werden gesetzt.
 two=2
 count=$(wc -l <  finalScan.txt)
+counter=$(wc -l < newList.txt)
+counter=$(($counter+1))
+arrayTwo=();
+
+s=1
 x=2
 c=0
 output=""
+#Daten über die ESSID und die Frequenz werden in ein Array gespeichert.
+while [ $s -lt  $counter ]; do
+	p=p
+        s=$s$p
+        freq=$(sed -n $s newerList.txt)
+        Essid=$(sed -n $s bestList.txt)
+	arrayTwo[${#arrayTwo[@]}]=$Essid
+        arrayTwo[${#arrayTwo[@]}]=$freq
+        s=${s%?}
+        s=$(($s+1))
+done;
+#Große While Schleife, welche jedes WLAN durchgeht. --> Pro WLAN 1 Durchgang.
 while [ $x -lt  $count ]; do
+	echo "beginn loop $x"
 	delimiter=,
 	array=();
 	p=p
 	x=$x$p
 	str=$(sed -n $x finalScan.txt)
 	s=$str$delimiter
+#WLAN Daten aus der ScanResults-01.csv werden in ein Array gespeichert. Trennzeichen in der Datei ist der Beistrich.
 	while [[ $s ]]; do
 		array+=( "${s%%"$delimiter"*}" );
 		s=${s#*"$delimiter"};
 	done;
+#Daten aus dem vor der großen While Schleife erzeugten Array werden geholt.
+#Es wird die ESSID von dem Array welches innerhalb der Schleife erzeugt worden
+#ist mit der ESSID der Schleife, welches außerhalb des Arrays erzeugt worden ist, verglichen.
+	for i in "${!arrayTwo[@]}"; do
+	     	qe='"'
+		ara=${arrayTwo[$i]}
+        	ara=$qe$ara$qe
+		if [[ "$ara" = *"$Essid"* ]]; then
+			i=$(($i+1))
+			frequency=${arrayTwo[@]:$i:1}
+			break;
+	        fi
+	done;
+#Daten aus Array von innerhalb der While Schleife werden in Variablen gespeichert
 	netw=network
 	raspberry=$(sed -n 6p spiderNet.conf)
 	network=$netw$c
 	channel=${array[@]:3:1}
-	BSSID=${array[@]:0:1}
-	access_method=${array[@]:5:1}
-	ip=${array[@]:11:1}
-	ESSID=${array[@]:13:1}
-	power=${array[@]:8:1}
-#	echo $power
-#	echo $ESSID
-#	echo $access_method
+	bssid=${array[@]:0:1}
+	access_methods=${array[@]:5:1}
+	ssid=${array[@]:13:1}
+	rssi=${array[@]:8:1}
+	BSSID2=$bssid
+#Der manufacturer wird herausgefunden, indem man die MAC nimmt und die ersten Zeichen mit einer Datenbank abgleicht.
+	MAC="$(echo $BSSID2 | sed 's/ //g' | sed 's/-//g' | sed 's/://g' | cut -c1-6)";
+	result="$(grep -i -A 4 ^$MAC ./oui.txt)"
+	if [ "$result" ]; then
+	    printf "$result" > manufacturer.txt
+	    sed -i "s/(base 16)//g" manufacturer.txt
+	    sed -i "s/(base 32)//g" manufacturer.txt
+	    sed -i "s/(base 64)//g" manufacturer.txt
+	    manufacturer=$(sed -n 1p manufacturer.txt)
+	else
+#Wenn kein passender Manufacturer gefunden worden ist, dann ist dieser Null.
+    		echo "MAC $BSSID2 is not found in the database."
+		manufacturer=NULL
+	fi;
+#Ip Adresse der WLANs wird herausgefunden und in einer Variable gespeichert.
+	ip a show | grep inet | grep brd > ip.txt
+	sed -ie 's/brd.*$/b/' ip.txt
+	sed -i 's/inet//g' ip.txt
+	sed -i 's/b//g' ip.txt
+	ip=$(sed -n 1p ip.txt)
+#Daten von verbundenen WLAN werden hier miteingebunden. Die ESSID muss gleich der vom Verbundenen WLAN mitgegebenen ESSID sein,
+#sonst werden die folgenden Informationen auf NULL gesetzt.
+	wlanESSID=$(sed -n 1p DATAFROMWLAN.txt)
+	if [[ "$ssid" = *"$wlanESSID"* ]]; then
+		address=$(grep 'Address' iwlistScanning.txt)
+		wrt="Cell"
+		printf '%s\n' "${address//$wrt/}" > newList.txt
+		sed -i "s/Address://g" newList.txt
+		sed -i "s/0//g" newList.txt
+		for v in {1..10}
+		do
+		        sed -i "s/ $v //g" newList.txt
+		done;
+#Um die richtige MAC herauszufinden muss, dass oben noch einmal gemacht werden. Der Grund dafür ist mir nicht bekannt, aber jetzt funktioniert es zumindest richtig.
+		w=1
+		while [ $counter -gt $w ]; do
+			p=p
+			w=$w$p
+			out=$(sed -n $w bestList.txt)
+			out=$(echo $out | sed 's/^.//')
+			out=${out%?}
+			if [[ "$wlanESSID" = "$out" ]]; then
+				echo "ES FUNKT!!"
+				sed -i 's/-//g' newList.txt
+				mac=$(sed -n $w newList.txt)
+				echo $mac
+			fi
+			w=${w%?}
+			w=$(($w+1))
+		done
+#Die ganzen Daten vom verbundenen WLAN werden in Variablen gespeichert.
+		gateway=$(sed -n 2p DATAFROMWLAN.txt)
+		channel_width=$(sed -n 3p DATAFROMWLAN.txt)
+		lease=$(sed -n 4p DATAFROMWLAN.txt)
+		dhcp=$(sed -n 5p DATAFROMWLAN.txt)
+		dns=$(sed -n 6p DATAFROMWLAN.txt)
+		ip a show | grep inet | grep brd > ip.txt
+       		sed -ie 's/brd.*$/b/' ip.txt
+       		sed -i 's/inet//g' ip.txt
+       		sed -i 's/b//g' ip.txt
+       		ip=$(sed -n 1p ip.txt)
+	else
+		gateway=NULL
+		channel_width=NULL
+		lease=NULL
+		dns=NULL
+		dhcp=NULL
+		ip=NULL
+		mac=NULL
+	fi;
+tester=""
+#Abfragen machen ob variablen gefüllt sind, sonst auf NULL setzen.
+if [[ "$raspberry" != *"$tester"* ]]; then
+	raspberry=NULL
+elif [[ "$location" != *"$tester"*  ]]; then
+	location=NULL
+elif [[ "$description" != *"$tester"*  ]]; then
+	description=NULL
+elif [[ "$channel" != *"$tester"*  ]]; then
+	channel=NULL
+elif [[ "$frequency" != *"$tester"*  ]]; then
+	frequency=NULL
+elif [[ "$ssid" != *"$tester"*  ]]; then
+	ssid=NULL
+elif [[ "$rssi" != *"$tester"*  ]]; then
+	rssi=NULL
+elif [[ "$access_methods" != *"$tester"*  ]]; then
+	access_methods=NULL
+elif [[ "$manufacturer" != *"$tester"*  ]]; then
+	manufacturer=NULL
+elif [[ "$bssid" != *"$tester"*  ]]; then
+	bssid=NULL
+else
+sleep 1
+fi
 
-	sed -i "s/raspi/$raspberry/g" jsonScript
-	sed -i "s/somewhere/NULL/g" jsonScript
-	sed -i "s/somebody/NULL/g" jsonScript
-	sed -i "s/network0/$network/g" jsonScript
-	sed -i "s/chanel/$channel/g" jsonScript
-	sed -i "s/afreq/NULL/g" jsonScript
-	sed -i "s/wide/NULL/g" jsonScript
-	sed -i "s/whichone/$power/g" jsonScript
-	sed -i "s/what/NULL/g" jsonScript
-	sed -i "s/sit/$ESSID/g" jsonScript
-	sed -i "s/thing/$BSSID/g" jsonScript
-	sed -i "s/who/NULL/g" jsonScript
-	sed -i "s/security/$access_method/g" jsonScript
-	sed -i "s/important/NULL/g" jsonScript
-	sed -i "s/conn/$ip/g" jsonScript
-	sed -i "s/towhere/NULL/g" jsonScript
-	sed -i "s/domain/NULL/g" jsonScript
-	sed -i "s/extern/NULL/g" jsonScript
 
-	export c
-	./jsonScript
-	json=$(<jsonSend.txt)
-	rm -f jsonSend.txt
-	output=$output$json
-
-	sed -i "s/$raspberry/raspi/g" jsonScript
-	sed -i "s/$network/network0/g" jsonScript
-	sed -i "s/$channel/chanel/g" jsonScript
-	sed -i "s/$BSSID/thing/g" jsonScript
-	sed -i "s/$access_method/security/g" jsonScript
-	sed -i "s/$ip/conn/g" jsonScript
-	sed -i "s/$ESSID/sit/g" jsonScript
-	sed -i "s/$power/whichone/g" jsonScript
-
+#Die gesammelten Daten werden in einen JSON- String verarbeitet.
+location=NULL
+description=NULL
+template1='{
+  "raspberry": "%s",
+  "location": "%s",
+  "description": "%s",'
+template2a='"%s": {
+    "channel": "%s",
+    "frequency": "%s",
+    "channel_width": "%s",
+    "rssi": "%s",
+    "lease": "%s",
+    "ssid": "%s",'
+template2b='"bssid": "%s", "manufacturer": "%s", "access_methods": "%s", "mac": "%s",'
+manufacturer=$(sed 's/[[:space:]]//g' <<<  $manufacturer)
+template2c='"ip": "%s",
+    "gateway": "%s",
+    "dns": "%s",
+    "dhcp": "%s"
+  },'
+#Man muss das leider so kompliziert aufteilen, da das Script den String sonst nicht verkraftet und teile dessen dann einfach auslässt.
+json_string1=$(printf "$template1" "$raspberry" "$location" "$description")
+json_string2a=$(printf "$template2a" "$network" "$channel" "$frequency" "$channel_width" "$rssi" "$lease" "$ssid")
+json_string2b=$(printf "$template2b" "$bssid" "$manufacturer" "$access_methods" "$mac")
+json_string2c=$(printf "$template2c" "$ip" "$gateway" "$dns" "$dhcp")
+#Beim ersten Durchgang wird auch das Template 1 mitgegeben, aber dann nichtmehr.
+if [ $c -eq 0 ]
+then
+json_string="$json_string1"
+json_string+="$json_string2a"
+json_string+="$json_string2b"
+json_string+="$json_string2c"
+else
+json_string+="$json_string2a"
+json_string+="$json_string2b"
+json_string+="$json_string2c"
+fi;
+#Counter werden um 1 erhöht.
 	c=${c%?}
 	c=$(($c+1))
 	x=${x%?}
 	x=$(($x+1))
 done;
-
-echo "$output" > "jsonSend.txt"
-truncate -s-2 jsonSend.txt
-output=$(<jsonSend.txt)
-rm -f jsonSend.txt
-c=n
-export c
-./jsonScript
-temp3=$(<jsonSend.txt)
-rm -f jsonSend.txt
-output=$output$temp3
-echo $output
-echo "$output" > "toBroker.txt"
+#Das 3. Template wird hinzugegeben, um den JSON- String zu schließen.
+template3='} |'
+json_string=${json_string::-1}
+json_string+="$template3"
+echo $json_string
+echo "$json_string" > "toBroker.txt"
+#Die nötigen Daten, damit die Daten zum Broker geschickt werden können, werden abgefragt.
 email=$(sed -n 2p spiderNet.conf)
 passwd=$(sed -n 4p spiderNet.conf)
 raspberryName=$(sed -n 6p spiderNet.conf)
 topicToPublish=$email"/"$raspberryName
+#Die Daten werden zum Broker geschickt.
 mosquitto_pub -r -h lavis.ddns.net -t $topicToPublish -p 8883 --cert /home/pi/keys/cloudfare.at.pem --key /home/pi/keys/cloudfare.at.key -f toBroker.txt -u $email -P $passwd
+#Die erstellte toBroker.txt wird gelöscht, da man sonst jedes mal 1 to Broker Datei mehr hätte wenn man das Script ausführt.
 rm -f toBroker.txt
+}
 
+function connectWLAN
+{
+#Prozesse welche die Verbindung zwischen WLAN und Raspberry behindern werden gekillt.
+pgrep dhcpcd > dhcpcdProcess.txt
+p=p
+x=1
+count=$(wc -l < dhcpcdProcess.txt )
+while [ $x -lt $count ] ; do
+        x=$x$p
+        num=$(sed -n $x dhcpcdProcess.txt)
+        kill $num
+        x=${x%?}
+        x=$(($x+1))
+done;
+pgrep wpa > wpaProcess.txt
+x=1
+count=$(wc -l < wpaProcess.txt )
+while [ $x -lt $count ] ; do
+        x=$x$p
+        num=$(sed -n $x wpaProcess.txt)
+        kill $num
+        x=${x%?}
+        x=$(($x+1))
+done;
+
+#Verbindung zum WLAN wird aufgebaut.
+wpa_supplicant -Dnl80211,wext -iwlan0 -c /home/pi/wpa.conf -B
+
+#ESSID des verbundenen WLANs wird geholt damit man diese später im Hauptscript miteinander vergleichen kann.
+essid=$(iwgetid wlan0 --raw)
+sed -i "s/ESSID/$essid/g" DATAFROMWLAN.txt
+echo $essid
+#Die IP Addresse des Verbundenen WLANs wird geholt.
+route -n > getIPAddr.txt
+sed -i "s/0.0.0.0//g" getIPAddr.txt
+sed -ie 's/UG.*$/U/' getIPAddr.txt
+sed -i "s/U//g" getIPAddr.txt
+ipAddr=$(sed -n 3p getIPAddr.txt)
+sed -i "s/ping/$ipAddr/g" DATAFROMWLAN.txt
+echo $ipAddr
+#Die Channel Width vom verbundenen WLAN wird geholt.
+iw dev > getChannelWidth.txt
+sed -n '/channel/p' getChannelWidth.txt > ChWidth.txt
+sed -ie 's/center.*$/c/' ChWidth.txt
+sed -i "s/c//g" ChWidth.txt
+sed -i "s/,//g" ChWidth.txt
+channelWidth=$(sed 's/^.*:/:/' ChWidth.txt)
+channelWidth="${channelWidth:1}"
+sed -i "s/breite/$channelWidth/g" DATAFROMWLAN.txt
+echo $channelWidth
+#Die Lease Time und der DHCPClient des Verbundenen WLANs wird geholt.
+cat /var/lib/dhcp/dhclient.leases > clientAndLease.txt
+sed -i "s/;//g" clientAndLease.txt
+sed -i "s/option//g" clientAndLease.txt
+sed -n '/dhcp-lease-time/p' clientAndLease.txt > lease.txt
+sed -n '/domain-name-servers/p' clientAndLease.txt > DHCP-Client.txt
+sed -i "s/dhcp-lease-time//g" lease.txt
+sed -i "s/domain-name-servers//g" DHCP-Client.txt
+lease=$(sed -n 1p lease.txt)
+DHCPClient=$(sed -n 1p DHCP-Client.txt)
+sed -i "s/zeit/$lease/g" DATAFROMWLAN.txt
+echo $lease
+sed -i "s/nutzer/$DHCPClient/g" DATAFROMWLAN.txt
+echo $DHCPClient
+#Die Server Addresse der Verbundenen WLANs wird geholt.
+cat /etc/resolv.conf > serverAddr.txt
+sed -i "s/nameserver//g" serverAddr.txt
+serverAddr=$(sed -n 2p serverAddr.txt)
+sed -i "s/games/$serverAddr/g" DATAFROMWLAN.txt
+echo $serverAddr
+# Alle Daten werden in eine Zwischenfile gespeichert. Das Hauptscript holt sich dann die Daten aus diesem Zwischenfile.
+}
+
+function disconnectWLAN
+{
+#die Connection zwischen Raspberry und WLAN wird gekappt indem bestimmt Prozesse gekillt werden, die die aufrechterhaltung der Verbindung sicherstellen.
+pgrep wpa_supplicant > wpa_supplicantProcess.txt
+p=p
+x=1
+count=$(wc -l < wpa_supplicantProcess.txt)
+while [ $x -lt $count ] ; do
+        x=$x$p
+        num=$(sed -n $x wpa_supplicantProcess.txt)
+        kill $num
+        x=${x%?}
+        x=$(($x+1))
+done;
+#Ein File welches vom verbundenen WLAN Daten sammelt, wird gelöscht und wieder neu erzeugt. Außerdem werden wichtige Daten hineingeschrieben.
+rm -f DATAFROMWLAN.txt
+touch DATAFROMWLAN.txt
+printf ESSID >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf ping >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf breite >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf zeit >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf nutzer >> DATAFROMWLAN.txt
+printf '\n' >> DATAFROMWLAN.txt
+printf games >> DATAFROMWLAN.txt
+}
+
+function autoConfig
+{
+# Driver Installation:
+sudo apt-get update
+sudo apt-get upgrade
+#Set wlan0 to monitor mode and wlan0mon
+ifconfig wlan0 down  #Wlan wird ausgeschalten damit wlan0mon eingeschalten werden kann
+iwconfig wlan0 mode managed      #ohne Mode managed kein wlan0mon
+
+#Der Command schaltet wlan0 zu wlan0mon. Es müssen zuvor aber ein paar Prozesse gelöscht werden, welche ebenfalls im Commandoutput vorkommen.
+#Diese werden dann heraussortiert und zuerst gekillt. Dann wird der airmon-ng Command wieder ausgeführt wodurch wlan0mon auftaucht.
+#Wlan0mon muss man nun in den monitor mode setzen, damit er Wlandaten auslesen kann. Außerdem muss das Wlan noch eingeschalten werden.
+airmon-ng start wlan0 > foundProcesses.txt
+sed -i 's/Found.*//g' foundProcesses.txt
+sed -i 's/Kill.*//g' foundProcesses.txt
+sed -i 's/the.*//g' foundProcesses.txt
+sed -i 's/and.*//g' foundProcesses.txt
+sed -i 's/PID.*//g' foundProcesses.txt
+sed -i '/PHY/q;p' foundProcesses.txt
+sed -i 's/PHY.*//g' foundProcesses.txt
+sed '/^$/d' foundProcesses.txt > tokill.txt
+sed 's/ .*//' tokill.txt
+sed 's/\s.*$//' tokill.txt
+sed 's/[a-zA-Z]//g' tokill.txt > killableNow.txt
+sed 's/.$//' killableNow.txt
+p=p
+x=3
+count=$(wc -l < tokill.txt )
+while [ $x -lt $count ] ; do
+        x=$x$p
+        num=$(sed -n $x killableNow.txt)
+        kill $num
+        x=${x%?}
+        x=$(($x+1))
+done;
+airmon-ng start wlan0
+iwconfig wlan0mon mode monitor
+iwconfig wlan0mon up
+#Pull Scripts from Git
+#git clone https://github.com/Sebongo/SpiderNetScripts.git
+#install mosquitto and client
+#apt-get install mosquitto
+#apt-get install mosquitto-clients
+}
+
+#Diese Funktion gibt einen Help Text aus, wenn die option -h an den Alias spidernet hinzugefügt wird. In diesem werden auch die anderen options angezeigt.
+function helpText
+{
+local text=(
+""
+"Spidernet is a command to gather information about the surrounding WIFI- Networks."
+"Usage: spidernet [options]"
+""
+"Command:"
+"spidernet        Gather information of WIFI_ Networks, connect/disconnect to/from WIFI- Networks and set up environment for the previous options to function."
+""
+"Options:"
+" --help, -h                  Print help"
+" --getJSON, -g               Transform gathered information into JSON- String."
+" --connectToWlan, -c         Connect to WLAN, to which the required information was given."
+" --disconnectFromWlan -d     Disconnect From WLAN to which the required information was given."
+" --autoConfigRasp, -a        Sets up the environment for the command to function."
+" --version, -v               Shows the Version of the Command."
+""
+)
+printf "%s\n" "${text[@]}"
+}
+
+#Wenn nur der bloße Alias angeschrieben worden ist, dann wird diese Message ausgegeben.
+function badUsage
+{
+local message="$1"
+    local txt=(
+"For an overview of the command, execute:"
+"spidernet --help"
+    )
+
+    [[ $message ]] && printf "$message\n"
+
+    printf "%s\n" "${txt[@]}"
+}
+#Gibt die Commandversion an.
+function version
+{
+local txt=(
+"spidernet version $VERSION"
+    )
+
+    printf "%s\n" "${txt[@]}"
+}
+#Wenn das Script von außen einen Parameter bekommt, wird dieser hier aufgefangen.
+#Je nachdem wie der Parameter aussieht, wird auch eine andere Function aufgerufen.
+#Wenn kein oder ein falscher Parameter aufgerufen wird, dann wird die BadUsage aufgerufen, welche einen Standarttext ausgibt.
+#Es kann nur eine Function aufgerufen werden, aber es hat wenig Sinn mehrere Functions direkt in einem Command aufzurufen.
+#Danach wird das Scipt geexited bzw. es wird verlassen.
+while (($#))
+do
+	case "$1" in
+
+		--getJSON | -g)
+			findWifiInfo
+			exit 0
+			;;
+
+		--connectToWlan | -c)
+			connectWLAN
+			exit 0
+			;;
+
+		--disconnectFromWlan | -d)
+			disconnectWLAN
+			exit 0
+			;;
+
+		--autoConfigRasp | -a)
+			autoConfig
+			exit 0
+			;;
+
+		--help | -h)
+			helpText
+			exit 0
+			;;
+
+		--version | -v)
+			version
+			exit 0
+			;;
+
+		*)
+			badUsage "Option/command not recognized"
+			exit 1
+			;;
+	esac;
+done;
+badUsage
+exit 1

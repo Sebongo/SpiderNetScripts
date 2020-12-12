@@ -1,0 +1,4 @@
+Kernel-IP-Routentabelle
+Ziel            Router          Genmask         Flags Metric Ref    Use Iface
+         10.0.0.138               UG    202    0        0 eth0
+1                 255.255.255.0   U     202    0        0 eth0

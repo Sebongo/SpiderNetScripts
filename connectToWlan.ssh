@@ -1,0 +1,72 @@
+#!/bin/bash
+
+#Prozesse welche die Verbindung zwischen WLAN und Raspberry behindern werden gekillt.
+pgrep dhcpcd > dhcpcdProcess.txt
+p=p
+x=1
+count=$(wc -l < dhcpcdProcess.txt )
+while [ $x -lt $count ] ; do
+        x=$x$p
+        num=$(sed -n $x dhcpcdProcess.txt)
+        kill $num
+        x=${x%?}
+        x=$(($x+1))
+done;
+pgrep wpa > wpaProcess.txt
+x=1
+count=$(wc -l < wpaProcess.txt )
+while [ $x -lt $count ] ; do
+        x=$x$p
+        num=$(sed -n $x wpaProcess.txt)
+        kill $num
+        x=${x%?}
+        x=$(($x+1))
+done;
+
+#Verbindung zum WLAN wird aufgebaut.
+wpa_supplicant -Dnl80211,wext -iwlan0 -c /home/pi/wpa.conf -B
+
+#ESSID des verbundenen WLANs wird geholt damit man diese später im Hauptscript miteinander vergleichen kann.
+essid=$(iwgetid wlan0 --raw)
+sed -i "s/ESSID/$essid/g" DATAFROMWLAN.txt
+echo $essid
+#Die IP Addresse des Verbundenen WLANs wird geholt.
+route -n > getIPAddr.txt
+sed -i "s/0.0.0.0//g" getIPAddr.txt
+sed -ie 's/UG.*$/U/' getIPAddr.txt
+sed -i "s/U//g" getIPAddr.txt
+ipAddr=$(sed -n 3p getIPAddr.txt)
+sed -i "s/ping/$ipAddr/g" DATAFROMWLAN.txt
+echo $ipAddr
+#Die Channel Width vom verbundenen WLAN wird geholt.
+iw dev > getChannelWidth.txt
+sed -n '/channel/p' getChannelWidth.txt > ChWidth.txt
+sed -ie 's/center.*$/c/' ChWidth.txt
+sed -i "s/c//g" ChWidth.txt
+sed -i "s/,//g" ChWidth.txt
+channelWidth=$(sed 's/^.*:/:/' ChWidth.txt)
+channelWidth="${channelWidth:1}"
+sed -i "s/breite/$channelWidth/g" DATAFROMWLAN.txt
+echo $channelWidth
+#Die Lease Time und der DHCPClient des Verbundenen WLANs wird geholt.
+cat /var/lib/dhcp/dhclient.leases > clientAndLease.txt
+sed -i "s/;//g" clientAndLease.txt
+sed -i "s/option//g" clientAndLease.txt
+sed -n '/dhcp-lease-time/p' clientAndLease.txt > lease.txt
+sed -n '/domain-name-servers/p' clientAndLease.txt > DHCP-Client.txt
+sed -i "s/dhcp-lease-time//g" lease.txt
+sed -i "s/domain-name-servers//g" DHCP-Client.txt
+lease=$(sed -n 1p lease.txt)
+DHCPClient=$(sed -n 1p DHCP-Client.txt)
+sed -i "s/zeit/$lease/g" DATAFROMWLAN.txt
+echo $lease
+sed -i "s/nutzer/$DHCPClient/g" DATAFROMWLAN.txt
+echo $DHCPClient
+#Die Server Addresse der Verbundenen WLANs wird geholt.
+cat /etc/resolv.conf > serverAddr.txt
+sed -i "s/nameserver//g" serverAddr.txt
+serverAddr=$(sed -n 2p serverAddr.txt)
+sed -i "s/games/$serverAddr/g" DATAFROMWLAN.txt
+echo $serverAddr
+
+# Alle Daten werden in eine Zwischenfile gespeichert. Das Hauptscript holt sich dann die Daten aus diesem Zwischenfile. 

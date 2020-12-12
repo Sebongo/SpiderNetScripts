@@ -1,0 +1,76 @@
+#!/bin/bash
+
+raspberry=raspi
+location=NULL
+description=NULL
+
+network=network0
+channel=chanel
+frequency=NULL
+channel_width=NULL
+rssi=power
+lease=NULL
+ssid=sit
+bssid=thing
+manufacturer=NULL
+access_methods=security
+
+mac=NULL
+ip=conn
+gateway=NULL
+dns=NULL
+dhcp=NULL
+
+
+template1='{
+  "raspberry": "%s",
+  "location": "%s",
+  "description": "%s",'
+
+template2='"%s": {
+    "channel": "%s",
+    "frequency": "%s",
+    "channel_width": "%s",
+    "rssi": "%s",
+    "lease": "%s",
+    "ssid": "%s",
+    "bssid": "%s",
+    "manufacturer": "%s",
+    "access_methods": "%s",
+    "mac": "%s",
+    "ip": "%s",
+    "gateway": "%s",
+    "dns": "%s",
+    "dhcp": "%s"
+  },'
+
+template3='} |'
+
+json_string1=$(printf "$template1" "$raspberry" "$location" "$description")
+json_string2=$(printf "$template2" "$network" "$channel" "$frequency" "$channel_width" "$rssi" "$lease" "$ssid" "$bssid" "$manufacturer" "$access_methods" "$mac" "$ip" "$gateway" "$dns" "$dhcp")
+
+if [ $c -eq 0 ]
+then
+#use template 1 and 2
+json_string="$json_string1"
+json_string+="$json_string2"
+echo "$json_string" > "jsonSend.txt"
+
+elif [ $c = n ]
+then
+#use template 3
+json_string="$template3"
+echo "$json_string" > "jsonSend.txt"
+
+else
+#use template 2
+json_string="$json_string2"
+echo "$json_string" > "jsonSend.txt"
+
+fi
+
+#json_string="$json_string1"
+#json_string+="$json_string2"
+#json_string+="$template3"
+#echo "$json_string" > "jsonSend.txt"
+

@@ -1,0 +1,219 @@
+#!/bin/bash
+rm -f ScanResults-01.csv
+ifconfig wlan0 down
+timeout 10 airodump-ng -w ScanResults --output-format csv wlan0mon & > /dev/null 2> /dev/null
+sleep 15
+pkill airodump-ng
+ifconfig wlan0 up
+iwlist scanning > iwlistScanning.txt
+frequency=$(grep 'Frequency' iwlistScanning.txt)
+wtr="(Channel "
+printf '%s\n' "${frequency//$wtr/}" > newList.txt
+sed -i "s/Frequency://g" newList.txt
+sed -i "s/)//g" newList.txt
+cat newList.txt | awk -F '\\GHz' '{print $1"GHz"}' > newerList.txt
+sed -i "s/GHz//g" newerList.txt
+#16
+address=$(grep 'Address' iwlistScanning.txt)
+wrt="Cell"
+printf '%s\n' "${address//$wrt/}" > newList.txt
+sed -i "s/Address://g" newList.txt
+sed -i "s/0//g" newList.txt
+for v in {1..10}
+do
+        sed -i "s/ $v //g" newList.txt
+done;
+sed -i "s/-//g" newList.txt
+#27
+essid=$(grep 'ESSID' iwlistScanning.txt)
+wpt="ESSID:"
+printf '%s\n' "${essid//$wpt/}" > bestList.txt
+#31
+sed -i 's/BSSID.*//g' ScanResults-01.csv
+sed -n '/,/p' ScanResults-01.csv
+sed -n '/Station/q;p' ScanResults-01.csv > scan.txt
+sed '/^$/d' scan.txt > finalScan.txt
+two=2
+count=$(wc -l <  finalScan.txt)
+counter=$(wc -l < newList.txt)
+arrayTwo=();
+s=1
+x=2
+c=0
+output=""
+
+
+while [ $s -lt  $counter ]; do
+	p=p
+        s=$s$p
+        freq=$(sed -n $s newerList.txt)
+        addr=$(sed -n $s newList.txt)
+        Essid=$(sed -n $s bestList.txt)
+#51
+	arrayTwo[${#arrayTwo[@]}]=$Essid
+        arrayTwo[${#arrayTwo[@]}]=$addr
+        arrayTwo[${#arrayTwo[@]}]=$freq
+#55
+        s=${s%?}
+        s=$(($s+1))
+done;
+#59
+while [ $x -lt  $count ]; do
+	echo "beginn loop $x"
+	delimiter=,
+	array=();
+	p=p
+	x=$x$p
+	str=$(sed -n $x finalScan.txt)
+	s=$str$delimiter
+	while [[ $s ]]; do
+		array+=( "${s%%"$delimiter"*}" );
+		s=${s#*"$delimiter"};
+	done;
+#71
+	for i in "${!arrayTwo[@]}"; do
+	     	qe='"'
+		ara=${arrayTwo[$i]}
+        	ara=$qe$ara$qe
+		if [[ "$ara" = *"$Essid"* ]]; then
+			i=$(($i+1))
+        	        mac=${arrayTwo[@]:$i:1}
+			i=$(($i+1))
+			frequency=${arrayTwo[@]:$i:1}
+			break;
+	        fi
+	done;
+
+	netw=network
+	raspberry=$(sed -n 6p spiderNet.conf)
+#	echo $raspberry
+	network=$netw$c
+#	echo $network
+	channel=${array[@]:3:1}
+#	echo $channel
+	bssid=${array[@]:0:1}
+#	echo $bssid
+	access_methods=${array[@]:5:1}
+#	echo $access_methods
+	ssid=${array[@]:13:1}
+#	echo $ssid
+	rssi=${array[@]:8:1}
+#	echo $rssi
+	echo "vars done"
+	BSSID2=$bssid
+
+	MAC="$(echo $BSSID2 | sed 's/ //g' | sed 's/-//g' | sed 's/://g' | cut -c1-6)";
+
+	result="$(grep -i -A 4 ^$MAC ./oui.txt)"
+#99
+	if [ "$result" ]; then
+	    printf "$result" > manufacturer.txt
+#	    sed -i "s/$MAC//g" manufacturer.txt
+	    sed -i "s/(base 16)//g" manufacturer.txt
+	    sed -i "s/(base 32)//g" manufacturer.txt
+	    sed -i "s/(base 64)//g" manufacturer.txt
+	    manufacturer=$(sed -n 1p manufacturer.txt)
+#	    echo $manufacturer
+	else
+    		echo "MAC $BSSID2 is not found in the database."
+		manufacturer=NULL
+	fi;
+#111
+	ip a show | grep inet | grep brd > ip.txt
+	sed -ie 's/brd.*$/b/' ip.txt
+	sed -i 's/inet//g' ip.txt
+	sed -i 's/b//g' ip.txt
+	#sed -i 's/b//g' ip.txt
+	ip=$(sed -n 1p ip.txt)
+#	echo $ip
+
+	wlanESSID=$(sed -n 1p DATAFROMWLAN.txt)
+#	echo $wlanESSID
+	if [[ "$ssid" = *"$wlanESSID"* ]]; then
+		gateway=$(sed -n 2p DATAFROMWLAN.txt)
+#		echo $ip
+		channel_width=$(sed -n 3p DATAFROMWLAN.txt)
+#		echo $channel_width
+		lease=$(sed -n 4p DATAFROMWLAN.txt)
+#		echo $lease
+		dns=$(sed -n 5p DATAFROMWLAN.txt)
+#		echo $dns
+		dhcp=$(sed -n 6p DATAFROMWLAN.txt)
+#		echo $dhcp
+	else
+		gateway=NULL
+		channel_width=NULL
+		lease=NULL
+		dns=NULL
+		dhcp=NULL
+	fi;
+#127
+location=NULL
+description=NULL
+
+template1='{
+  "raspberry": "%s",
+  "location": "%s",
+  "description": "%s",'
+#echo $template1
+
+template2='"%s": {
+    "channel": "%s",
+    "frequency": "%s",
+    "channel_width": "%s",
+    "rssi": "%s",
+    "lease": "%s",
+    "ssid": "%s",
+    "bssid": "%s",
+    "manufacturer": "%s",
+    "access_methods": "%s",
+    "mac": "%s",
+    "ip": "%s",
+    "gateway": "%s",
+    "dns": "%s",
+    "dhcp": "%s"
+  },'
+#echo $template2
+
+
+json_string1=$(printf "$template1" "$raspberry" "$location" "$description")
+echo $json_string1
+echo "this was string 1"
+json_string2=$(printf "$template2" "$network" "$channel" "$frequency" "$channel_width" "$rssi")
+#"$lease" "$ssid" "$bssid" "$manufacturer" "$access_methods" "$mac" "$ip" "$gateway" "$dns" "$dhcp"
+echo $json_string2
+echo "this was string 2"
+
+#echo $c
+if [ $c -eq 0 ]
+then
+#echo temp1and2
+#use template 1 and 2
+json_string="$json_string1"
+#-----------------------------------------------------------------------------------------------------
+json_string+="$json_string2"
+#echo $json_string2
+#echo $json_string
+else
+#use template 2
+#echo otemp2
+json_string+="$json_string2"
+fi;
+
+	c=${c%?}
+	c=$(($c+1))
+	x=${x%?}
+	x=$(($x+1))
+done;
+
+template3='} |'
+
+json_string+="$template3"
+echo $json_string
+echo "$json_string" > "toBroker.txt"
+email=$(sed -n 2p spiderNet.conf)
+passwd=$(sed -n 4p spiderNet.conf)
+raspberryName=$(sed -n 6p spiderNet.conf)
+topicToPublish=$email"/"$raspberryName
+mosquitto_pub -r -h lavis.ddns.net -t $topicToPublish -p 8883 --cert /home/pi/keys/cloudfare.at.pem --key /home/pi/keys/cloudfare.at.key -f toBroker.txt -u $email -P $passwd
+rm -f toBroker.txt
