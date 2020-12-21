@@ -1,9 +1,12 @@
 #!/bin/bash
 #Globale Variable welche die Version anzeigt
 VERSION="4.1.1"
+export AnException=100
+export AnotherException=101
 #Habe alles in Functions eingegliedert, damit ich alle Scripts in eines zusammenfügen kann und diese dann mit options aufrufen kann.
-
 function findWifiInfo {
+try
+(
 #Scan_Results-01.csv wird gelöscht, da sonst bei nächsten Scriptaufruf die Datei mit 02, dann mit 03 usw. endet. So endet sie immer mit 01.
 #wlan0 wird ausgeschalten, damit gescannt werden kann.
 rm -f ScanResults-01.csv
@@ -15,7 +18,7 @@ sleep 15
 pkill airodump-ng
 ifconfig wlan0 up
 #Weitere Daten werden geholt.
-iwlist scanning > iwlistScanning.txt
+iwlist scanning > iwlistScanning.txt > /dev/null
 #Frequenz der WLANs wird herausgefunden
 frequency=$(grep 'Frequency' iwlistScanning.txt)
 wtr="(Channel "
@@ -48,7 +51,6 @@ while [ $s -lt  $counter ]; do
 	p=p
         s=$s$p
         freq=$(sed -n $s newerList.txt)
-	echo $freq
         Essid=$(sed -n $s bestList.txt)
 	arrayTwo[${#arrayTwo[@]}]=$Essid
         arrayTwo[${#arrayTwo[@]}]=$freq
@@ -78,7 +80,6 @@ while [ $x -lt  $count ]; do
 		if [[ "$ara" = *"$Essid"* ]]; then
 			i=$(($i+1))
 			frequency=${arrayTwo[@]:$i:1}
-			echo $frequency
 			break;
 	        fi
 	done;
@@ -161,7 +162,7 @@ while [ $x -lt  $count ]; do
 		ip=NULL
 		mac=NULL
 	fi;
-tester=" "
+tester=""
 #Abfragen machen ob variablen gefüllt sind, sonst auf NULL setzen.
 if [[ "$raspberry" != *"$tester"* ]]; then
 	raspberry=NULL
@@ -244,18 +245,24 @@ passwd=$(sed -n 4p spiderNet.conf)
 raspberryName=$(sed -n 6p spiderNet.conf)
 topicToPublish=$email"/"$raspberryName
 #Die Daten werden zum Broker geschickt.
-
-if [[ "$email" != *"$tester"* ]]; then
-	echo "Write your E- Mail into the spiderNet.conf file."
-elif [[ "$passwd" != *"$tester"* ]]; then
-	echo "Write your Password into the spiderNet.conf file."
-elif [[ "$raspberryName" != *"$tester"* ]]; then
-	echo "Write your raspberryName into the spiderNet.conf file."
-else
-	mosquitto_pub -r -h lavis.ddns.net -t $topicToPublish -p 8883 --cert /home/pi/keys/cloudfare.at.pem --key /home/pi/keys/cloudfare.at.key -f toBroker.txt -u $email -P $passwd
-fi;
+mosquitto_pub -r -h lavis.ddns.net -t $topicToPublish -p 8883 --cert /home/pi/keys/cloudfare.at.pem --key /home/pi/keys/cloudfare.at.key -f toBroker.txt -u $email -P $passwd
 #Die erstellte toBroker.txt wird gelöscht, da man sonst jedes mal 1 to Broker Datei mehr hätte wenn man das Script ausführt.
 rm -f toBroker.txt
+)
+
+catch || {
+	case $ex_code in
+		$AnException)
+			echo "AnException was thrown"
+		;;
+		$AnotherException)
+			echo "AnotherException was thrown"
+		;;
+		*)
+			echo "An unexpected exception was thrown"
+		;;
+	esac
+}
 }
 
 function connectWLAN
@@ -289,7 +296,7 @@ wpa_supplicant -Dnl80211,wext -iwlan0 -c /home/pi/wpa.conf -B
 #ESSID des verbundenen WLANs wird geholt damit man diese später im Hauptscript miteinander vergleichen kann.
 essid=$(iwgetid wlan0 --raw)
 sed -i "s/ESSID/$essid/g" DATAFROMWLAN.txt
-echo $essid
+#echo $essid
 #Die IP Addresse des Verbundenen WLANs wird geholt.
 route -n > getIPAddr.txt
 sed -i "s/0.0.0.0//g" getIPAddr.txt
@@ -297,7 +304,7 @@ sed -ie 's/UG.*$/U/' getIPAddr.txt
 sed -i "s/U//g" getIPAddr.txt
 ipAddr=$(sed -n 3p getIPAddr.txt)
 sed -i "s/ping/$ipAddr/g" DATAFROMWLAN.txt
-echo $ipAddr
+#echo $ipAddr
 #Die Channel Width vom verbundenen WLAN wird geholt.
 iw dev > getChannelWidth.txt
 sed -n '/channel/p' getChannelWidth.txt > ChWidth.txt
@@ -307,7 +314,7 @@ sed -i "s/,//g" ChWidth.txt
 channelWidth=$(sed 's/^.*:/:/' ChWidth.txt)
 channelWidth="${channelWidth:1}"
 sed -i "s/breite/$channelWidth/g" DATAFROMWLAN.txt
-echo $channelWidth
+#echo $channelWidth
 #Die Lease Time und der DHCPClient des Verbundenen WLANs wird geholt.
 cat /var/lib/dhcp/dhclient.leases > clientAndLease.txt
 sed -i "s/;//g" clientAndLease.txt
@@ -319,15 +326,15 @@ sed -i "s/domain-name-servers//g" DHCP-Client.txt
 lease=$(sed -n 1p lease.txt)
 DHCPClient=$(sed -n 1p DHCP-Client.txt)
 sed -i "s/zeit/$lease/g" DATAFROMWLAN.txt
-echo $lease
+#echo $lease
 sed -i "s/nutzer/$DHCPClient/g" DATAFROMWLAN.txt
-echo $DHCPClient
+#echo $DHCPClient
 #Die Server Addresse der Verbundenen WLANs wird geholt.
 cat /etc/resolv.conf > serverAddr.txt
 sed -i "s/nameserver//g" serverAddr.txt
 serverAddr=$(sed -n 2p serverAddr.txt)
 sed -i "s/games/$serverAddr/g" DATAFROMWLAN.txt
-echo $serverAddr
+#echo $serverAddr
 # Alle Daten werden in eine Zwischenfile gespeichert. Das Hauptscript holt sich dann die Daten aus diesem Zwischenfile.
 }
 
