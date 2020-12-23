@@ -1,16 +1,16 @@
   
   
-  362 avahi-daemon
-  362 avahi-daemon
-  367 NetworkManager
-  367 NetworkManager
-  368 wpa_supplicant
-  368 wpa_supplicant
-  404 avahi-daemon
-  404 avahi-daemon
+  359 avahi-daemon
+  359 avahi-daemon
+  380 wpa_supplicant
+  380 wpa_supplicant
+  381 NetworkManager
+  381 NetworkManager
+  399 avahi-daemon
+  399 avahi-daemon
   410 dhcpcd
   410 dhcpcd
   444 wpa_supplicant
   444 wpa_supplicant
-  508 dhclient
-  508 dhclient
+  507 dhclient
+  507 dhclient

@@ -163,25 +163,23 @@ while [ $x -lt  $count ]; do
 	fi;
 tester=" "
 #Abfragen machen ob variablen gefüllt sind, sonst auf NULL setzen.
-if [[ "$raspberry" != *"$tester"* ]]; then
-	raspberry=NULL
-elif [[ "$location" != *"$tester"*  ]]; then
+if [[ "$location" == *"$tester"*  ]]; then
 	location=NULL
-elif [[ "$description" != *"$tester"*  ]]; then
+elif [[ "$description" == *"$tester"*  ]]; then
 	description=NULL
-elif [[ "$channel" != *"$tester"*  ]]; then
+elif [[ "$channel" == *"$tester"*  ]]; then
 	channel=NULL
-elif [[ "$frequency" != *"$tester"*  ]]; then
+elif [[ "$frequency" == *"$tester"*  ]]; then
 	frequency=NULL
-elif [[ "$ssid" != *"$tester"*  ]]; then
+elif [[ "$ssid" == *"$tester"*  ]]; then
 	ssid=NULL
-elif [[ "$rssi" != *"$tester"*  ]]; then
+elif [[ "$rssi" == *"$tester"*  ]]; then
 	rssi=NULL
-elif [[ "$access_methods" != *"$tester"*  ]]; then
+elif [[ "$access_methods" == *"$tester"*  ]]; then
 	access_methods=NULL
-elif [[ "$manufacturer" != *"$tester"*  ]]; then
+elif [[ "$manufacturer" == *"$tester"*  ]]; then
 	manufacturer=NULL
-elif [[ "$bssid" != *"$tester"*  ]]; then
+elif [[ "$bssid" == *"$tester"*  ]]; then
 	bssid=NULL
 else
 sleep 1
@@ -245,11 +243,11 @@ raspberryName=$(sed -n 6p spiderNet.conf)
 topicToPublish=$email"/"$raspberryName
 #Die Daten werden zum Broker geschickt.
 
-if [[ "$email" != *"$tester"* ]]; then
+if [[ "$email" == *"$tester"* ]]; then
 	echo "Write your E- Mail into the spiderNet.conf file."
-elif [[ "$passwd" != *"$tester"* ]]; then
+elif [[ "$passwd" = *"$tester"* ]]; then
 	echo "Write your Password into the spiderNet.conf file."
-elif [[ "$raspberryName" != *"$tester"* ]]; then
+elif [[ "$raspberryName" == *"$tester"* ]]; then
 	echo "Write your raspberryName into the spiderNet.conf file."
 else
 	mosquitto_pub -r -h lavis.ddns.net -t $topicToPublish -p 8883 --cert /home/pi/keys/cloudfare.at.pem --key /home/pi/keys/cloudfare.at.key -f toBroker.txt -u $email -P $passwd
@@ -421,7 +419,7 @@ local text=(
 " --help, -h                  Print help"
 " --getJSON, -g               Transform gathered information into JSON- String."
 " --connectToWlan, -c         Connect to WLAN, to which the required information was given."
-" --disconnectFromWlan -d     Disconnect From WLAN to which the required information was given."
+" --disconnectFromWlan, -d    Disconnect From WLAN to which the required information was given."
 " --autoConfigRasp, -a        Sets up the environment for the command to function."
 " --version, -v               Shows the Version of the Command."
 ""
