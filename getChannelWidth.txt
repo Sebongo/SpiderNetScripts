@@ -8,7 +8,7 @@ phy#0
 	Interface wlan0
 		ifindex 3
 		wdev 0x1
-		addr 8a:ae:20:2c:74:a0
+		addr ea:9b:1e:5c:e1:7e
 		ssid A1-461521
 		type managed
 		channel 11 (2462 MHz), width: 20 MHz, center1: 2462 MHz

@@ -1,6 +1,6 @@
 #!/bin/bash
 #Globale Variable welche die Version anzeigt
-VERSION="4.1.1"
+VERSION="4.3.2"
 #Habe alles in Functions eingegliedert, damit ich alle Scripts in eines zusammenfügen kann und diese dann mit options aufrufen kann.
 
 function findWifiInfo {
@@ -42,6 +42,7 @@ arrayTwo=();
 s=1
 x=2
 c=0
+num=0
 output=""
 #Daten über die ESSID und die Frequenz werden in ein Array gespeichert.
 while [ $s -lt  $counter ]; do
@@ -78,14 +79,14 @@ while [ $x -lt  $count ]; do
 		if [[ "$ara" = *"$Essid"* ]]; then
 			i=$(($i+1))
 			frequency=${arrayTwo[@]:$i:1}
-			echo $frequency
 			break;
 	        fi
 	done;
 #Daten aus Array von innerhalb der While Schleife werden in Variablen gespeichert
 	netw=network
 	raspberry=$(sed -n 6p spiderNet.conf)
-	network=$netw$c
+	network=$netw$num
+	num=$(($num+1))
 	channel=${array[@]:3:1}
 	bssid=${array[@]:0:1}
 	access_methods=${array[@]:5:1}
@@ -100,10 +101,11 @@ while [ $x -lt  $count ]; do
 	    sed -i "s/(base 16)//g" manufacturer.txt
 	    sed -i "s/(base 32)//g" manufacturer.txt
 	    sed -i "s/(base 64)//g" manufacturer.txt
-	    manufacturer=$(sed -n 1p manufacturer.txt)
+	    manuf=$(sed -n 1p manufacturer.txt)
+	    manufacturer=${manuf:6}
 	else
 #Wenn kein passender Manufacturer gefunden worden ist, dann ist dieser Null.
-    		echo "MAC $BSSID2 is not found in the database."
+#    		echo "MAC $BSSID2 is not found in the database."
 		manufacturer=NULL
 	fi;
 #Ip Adresse der WLANs wird herausgefunden und in einer Variable gespeichert.
@@ -163,27 +165,27 @@ while [ $x -lt  $count ]; do
 	fi;
 tester=" "
 #Abfragen machen ob variablen gefüllt sind, sonst auf NULL setzen.
-if [[ "$location" == *"$tester"*  ]]; then
-	location=NULL
-elif [[ "$description" == *"$tester"*  ]]; then
-	description=NULL
-elif [[ "$channel" == *"$tester"*  ]]; then
-	channel=NULL
-elif [[ "$frequency" == *"$tester"*  ]]; then
-	frequency=NULL
-elif [[ "$ssid" == *"$tester"*  ]]; then
-	ssid=NULL
-elif [[ "$rssi" == *"$tester"*  ]]; then
-	rssi=NULL
-elif [[ "$access_methods" == *"$tester"*  ]]; then
-	access_methods=NULL
-elif [[ "$manufacturer" == *"$tester"*  ]]; then
-	manufacturer=NULL
-elif [[ "$bssid" == *"$tester"*  ]]; then
-	bssid=NULL
-else
-sleep 1
-fi
+#if [[ "$location" == *"$tester"*  ]]; then
+#	location=NULL
+#elif [[ "$description" != *"$tester"*  ]]; then
+#	description=NULL
+#elif [[ "$channel" != *"$tester"*  ]]; then
+#	channel=NULL
+#elif [[ "$frequency" != *"$tester"*  ]]; then
+#	frequency=NULL
+#elif [[ "$ssid" != *"$tester"*  ]]; then
+#	ssid=NULL
+#elif [[ "$rssi" != *"$tester"*  ]]; then
+#	rssi=NULL
+#elif [[ "$access_methods" != *"$tester"*  ]]; then
+#	access_methods=NULL
+#elif [[ "$manufacturer" != *"$tester"*  ]]; then
+#	manufacturer=NULL
+#elif [[ "$bssid" != *"$tester"*  ]]; then
+#	bssid=NULL
+#else
+#sleep 1
+#fi
 
 
 #Die gesammelten Daten werden in einen JSON- String verarbeitet.
@@ -331,7 +333,7 @@ echo $serverAddr
 
 function disconnectWLAN
 {
-#die Connection zwischen Raspberry und WLAN wird gekappt indem bestimmt Prozesse gekillt werden, die die aufrechterhaltung der Verbindung sicherstellen.
+#die Connection zwischen Raspberry und WLAN wird gekappt indem bestimmt Prozesse gekillt werden, die die Aufrechterhaltung der Verbindung sicherstellen.
 pgrep wpa_supplicant > wpa_supplicantProcess.txt
 p=p
 x=1
@@ -422,6 +424,7 @@ local text=(
 " --disconnectFromWlan, -d    Disconnect From WLAN to which the required information was given."
 " --autoConfigRasp, -a        Sets up the environment for the command to function."
 " --version, -v               Shows the Version of the Command."
+" --closeTopic, -t             Schließt das verbundene Topic."
 ""
 )
 printf "%s\n" "${text[@]}"
@@ -445,10 +448,25 @@ function version
 {
 local txt=(
 "spidernet version $VERSION"
+"Do not use this Script without Permission. All right reserved."
     )
 
     printf "%s\n" "${txt[@]}"
 }
+
+#Arkane Magie erfüllte den Raum, als das vergessene Scipt in findWifiInformation.sh.save eingefügt wurde.
+#Die magische Fähigkeit des closeTopicScript.sh besteht darin die Lebensenergie aus Topics zu saugen.
+function closeTopic
+{
+email=$(sed -n 2p spiderNet.conf)
+passwd=$(sed -n 4p spiderNet.conf)
+raspberryName=$(sed -n 6p spiderNet.conf)
+topicToPublish=$email"/"$raspberryName
+#mosquitto_sub -h lavis.ddns.net -t $topicToPublish -p 8883 -u $email -P $passwd --remove-retained
+mosquitto_pub -h lavis.ddns.net -t $topicToPublish -p 8883 -u $email -P $passwd -n -r -d
+#mosquitto_pub -h lavis.ddns.net -t $topicToPublish -p 8883 -u $email -P $passwd -m
+}
+
 #Wenn das Script von außen einen Parameter bekommt, wird dieser hier aufgefangen.
 #Je nachdem wie der Parameter aussieht, wird auch eine andere Function aufgerufen.
 #Wenn kein oder ein falscher Parameter aufgerufen wird, dann wird die BadUsage aufgerufen, welche einen Standarttext ausgibt.
@@ -485,6 +503,11 @@ do
 
 		--version | -v)
 			version
+			exit 0
+			;;
+
+		--closeTopic | -t)
+			closeTopic
 			exit 0
 			;;
 
